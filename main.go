@@ -8,6 +8,7 @@ import (
 	"runtime"
 	"runtime/pprof"
 	"sort"
+	"strconv"
 	"unsafe"
 )
 
@@ -16,34 +17,6 @@ type Stats struct {
 	Max   int64
 	Sum   int64
 	Count int64
-}
-
-// unsafeString converts []byte to string without allocation
-func unsafeString(b []byte) string {
-	return *(*string)(unsafe.Pointer(&b))
-}
-
-func parseIntFast(b []byte) (int64, error) {
-	n := len(b)
-	if n == 0 {
-		return 0, fmt.Errorf("empty input")
-	}
-
-	var val int64
-	for i := range n {
-		c := b[i]
-		if c == ' ' || c == '\t' || c == '\r' || c == '\n' {
-			continue
-		}
-
-		if c >= '0' && c <= '9' {
-			val = val*10 + int64(c-'0')
-		} else {
-			return 0, fmt.Errorf("invalid digit: %c", c)
-		}
-	}
-
-	return val, nil
 }
 
 func main() {
@@ -222,8 +195,6 @@ func processPart(filePath string, fileOffset, fileSize int64, resultsChan chan m
 
 	endpointStats := make(map[string]*Stats)
 
-	stringCache := make(map[string]string)
-
 	// Будем читать пачками по 32Mb
 	chunkSize := 32 * 1024 * 1024
 	buf := make([]byte, chunkSize)
@@ -274,17 +245,17 @@ func processPart(filePath string, fileOffset, fileSize int64, resultsChan chan m
 			continue
 		}
 
-		processLines(processingChunk, endpointStats, stringCache)
+		processLines(processingChunk, endpointStats)
 	}
 
 	if len(remainder) > 0 {
-		processLines(remainder, endpointStats, stringCache)
+		processLines(remainder, endpointStats)
 	}
 
 	resultsChan <- endpointStats
 }
 
-func processLines(data []byte, stats map[string]*Stats, stringCache map[string]string) error {
+func processLines(data []byte, stats map[string]*Stats) error {
 	spaceCount := 0
 
 	var pathStart, pathEnd, timeStart int
@@ -306,19 +277,9 @@ func processLines(data []byte, stats map[string]*Stats, stringCache map[string]s
 
 		// Если встречаем перевод строки, то сбрасываем счетчик пробелов
 		if data[i] == '\n' {
-			pathBytes := data[pathStart:pathEnd]
-			unsafeKey := unsafeString(pathBytes)
+			endpointStr := unsafe.String(&data[pathStart], pathEnd-pathStart)
 
-			var endpointStr string
-			if cached, exists := stringCache[unsafeKey]; exists {
-				endpointStr = cached
-			} else {
-				// Создаем новую строку только если её нет в кэше
-				endpointStr = string(pathBytes)
-				stringCache[endpointStr] = endpointStr
-			}
-
-			responseTime, err := parseIntFast(data[timeStart:i])
+			responseTime, err := strconv.Atoi(unsafe.String(&data[timeStart], i-timeStart))
 			if err != nil {
 				fmt.Println("Error parsing response time:", err)
 				continue
