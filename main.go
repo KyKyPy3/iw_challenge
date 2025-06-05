@@ -289,7 +289,7 @@ func processLines(data []byte, stats map[string]*Stats, stringCache map[string]s
 
 	var pathStart, pathEnd, timeStart int
 
-	for i := 34; i < len(data); i++ {
+	for i := 32; i < len(data); i++ {
 		if data[i] == ' ' {
 			spaceCount++
 			switch spaceCount {
@@ -320,7 +320,8 @@ func processLines(data []byte, stats map[string]*Stats, stringCache map[string]s
 
 			responseTime, err := parseIntFast(data[timeStart:i])
 			if err != nil {
-				return fmt.Errorf("invalid response time: %v", err)
+				fmt.Println("Error parsing response time:", err)
+				continue
 			}
 
 			s := stats[endpointStr]
@@ -340,7 +341,7 @@ func processLines(data []byte, stats map[string]*Stats, stringCache map[string]s
 
 			spaceCount = 0
 			// Смещаемся, исключая timestamp и IP
-			i += 34
+			i += 32
 		}
 	}
 
